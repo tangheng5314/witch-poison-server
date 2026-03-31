@@ -585,6 +585,9 @@ class GameServer {
         
         room.broadcast({ type: 'player_joined', playerId: player.id, playerName: player.name }, ws.playerId);
         
+        // 广播 room_update 给所有玩家（包括新加入的玩家），更新完整玩家列表
+        room.broadcast({ type: 'room_update', players: room.getPlayerList() });
+        
         // 尝试自动开始游戏（玩家>=2时）
         room.tryAutoStart();
     }
