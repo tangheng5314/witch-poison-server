@@ -123,7 +123,8 @@ class Room {
     
     addPlayer(ws, name) {
         if (this.players.size >= this.maxPlayers) return null;
-        const id = uuidv4();
+        // 使用 WebSocket 上已有的 playerId（登录时创建的）
+        const id = ws.playerId;
         const player = {
             id, ws, name,
             points: CONFIG.INITIAL_POINTS,
