@@ -4,69 +4,58 @@ const { v4: uuidv4 } = require('uuid');
 
 const PORT = process.env.PORT || 3000;
 
-// 游戏配置
+// ========== 游戏常量 ==========
 const CONFIG = {
-    MIN_PLAYERS: 3,
-    MAX_PLAYERS: 6,
-    INITIAL_GOLD: 3,
-    INITIAL_HAND_SIZE: 3,
-    MAX_ROUNDS: 20
+    INITIAL_POINTS: 3,
+    BUY_COST: 5,
+    TURN_TIMEOUT: 15,
+    GRID_SIZE: 5,
+    FOOD_COUNT: 25,
+    ITEM_COUNT: 24,
+    ROLE_COUNT: 10,
+    MIN_PLAYERS: 2,
+    MAX_PLAYERS: 4
 };
 
-// 卡牌数据
+// ========== 卡牌数据 ==========
 const CARD_DATA = {
-    materials: {
-        poison: { subtype: 'danger', price: 2 },
-        antidote: { subtype: 'heal', price: 2 },
-        herb: { subtype: 'heal', price: 1 },
-        cookie: { subtype: 'food', price: 1 },
-        candy: { subtype: 'food', price: 1 },
-        donut: { subtype: 'food', price: 1 },
-        lollipop: { subtype: 'food', price: 1 },
-        apple_pie: { subtype: 'food', price: 1 },
-        apple: { subtype: 'danger', price: 2 }
-    },
-    skills: {
-        energy_drink: { subtype: 'buff', price: 2 },
-        magnifier: { subtype: 'special', price: 1 },
-        amulet: { subtype: 'defense', price: 3 },
-        gold: { subtype: 'resource', price: 0 },
-        luck: { subtype: 'buff', price: 1 },
-        power: { subtype: 'buff', price: 2 },
-        swap: { subtype: 'special', price: 2 },
-        steal: { subtype: 'special', price: 2 },
-        peek: { subtype: 'special', price: 1 }
-    }
+    foods: [
+        { id: 'apple', name: '苹果', count: 6, points: 1, special: null },
+        { id: 'apple_pie', name: '苹果派', count: 3, points: 2, special: null },
+        { id: 'lollipop', name: '棒棒糖', count: 2, points: 0, special: 'steal_3' },
+        { id: 'donut', name: '甜甜圈', count: 2, points: 3, special: null },
+        { id: 'candy', name: '糖果', count: 1, points: 5, special: null },
+        { id: 'magnifier', name: '放大镜', count: 2, points: 0, special: 'peek_one' },
+        { id: 'herb', name: '魔法草药', count: 2, points: 0, special: 'draw_item' },
+        { id: 'cookie', name: '曲奇饼干', count: 2, points: 0, special: 'double_points' },
+        { id: 'energy_drink', name: '能量饮料', count: 2, points: 0, special: 'extra_flip' },
+        { id: 'poison', name: '女巫的毒药', count: 3, points: 0, special: 'death' }
+    ],
+    items: [
+        { id: 'gold', name: '点石成金', count: 3, points: 7 },
+        { id: 'steal', name: '妙手空空', count: 3, special: 'steal_3' },
+        { id: 'lucky', name: '强运甘露', count: 3, special: 'choose_two' },
+        { id: 'force', name: '力量药水', count: 3, special: 'force_flip' },
+        { id: 'amulet', name: '护身符', count: 3, special: 'shield' },
+        { id: 'swap', name: '移形换影', count: 3, special: 'swap_cards' },
+        { id: 'antidote', name: '解毒剂', count: 3, special: 'cure' },
+        { id: 'peek', name: '窥视', count: 3, special: 'peek_three' }
+    ],
+    roles: [
+        { id: 'innocent', name: '纯白之女', skill: 'reshuffle' },
+        { id: 'scholar', name: '学者', skill: 'bonus_5' },
+        { id: 'elder', name: '长老', skill: 'choose_two' },
+        { id: 'maid', name: '女仆', skill: 'extra_item' },
+        { id: 'girl', name: '小女孩', skill: 'discount' },
+        { id: 'archer', name: '弓箭手', skill: 'double_flip' },
+        { id: 'graveyard', name: '守墓人', skill: 'cure' },
+        { id: 'magician', name: '魔术师', skill: 'peek_one' },
+        { id: 'rogue', name: '老流氓', skill: 'steal_3' },
+        { id: 'skip', name: '少女', skill: 'skip_turn' }
+    ]
 };
 
-// 生成抽牌堆
-function generateDrawDeck() {
-    const deck = [];
-    
-    // 材料牌配置
-    const materialConfig = {
-        poison: 3, antidote: 2, herb: 3, cookie: 2,
-        candy: 2, donut: 2, lollipop: 1, apple_pie: 1, apple: 2
-    };
-    
-    // 技能牌配置
-    const skillConfig = {
-        energy_drink: 2, magnifier: 1, amulet: 1, gold: 2,
-        luck: 1, power: 1, swap: 1, steal: 1, peek: 1
-    };
-    
-    for (const [id, count] of Object.entries(materialConfig)) {
-        for (let i = 0; i < count; i++) deck.push(id);
-    }
-    
-    for (const [id, count] of Object.entries(skillConfig)) {
-        for (let i = 0; i < count; i++) deck.push(id);
-    }
-    
-    return shuffle(deck);
-}
-
-// Fisher-Yates 洗牌
+// ========== 工具函数 ==========
 function shuffle(array) {
     const arr = [...array];
     for (let i = arr.length - 1; i > 0; i--) {
@@ -76,7 +65,6 @@ function shuffle(array) {
     return arr;
 }
 
-// 生成房间号
 function generateRoomCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
@@ -86,698 +74,654 @@ function generateRoomCode() {
     return code;
 }
 
-// 房间类
+function generateFoodDeck() {
+    const deck = [];
+    for (const food of CARD_DATA.foods) {
+        for (let i = 0; i < food.count; i++) {
+            deck.push({ type: 'food', id: food.id, revealed: false });
+        }
+    }
+    return shuffle(deck);
+}
+
+function generateItemDeck() {
+    const deck = [];
+    for (const item of CARD_DATA.items) {
+        for (let i = 0; i < item.count; i++) {
+            deck.push({ type: 'item', id: item.id });
+        }
+    }
+    return shuffle(deck);
+}
+
+function assignRoles(playerCount) {
+    const roles = shuffle([...CARD_DATA.roles]);
+    return roles.slice(0, playerCount);
+}
+
+// ========== 房间类 ==========
 class Room {
-    constructor(code, hostId, maxPlayers, gameMode) {
+    constructor(code, hostId, maxPlayers) {
         this.code = code;
         this.hostId = hostId;
         this.maxPlayers = maxPlayers;
-        this.gameMode = gameMode;
         this.players = new Map();
         this.gameStarted = false;
-        this.gameState = null;
+        this.foodDeck = [];
+        this.itemDeck = [];
+        this.discardDeck = [];
+        this.foodCards = [];
+        this.currentTurnIndex = 0;
+        this.turnPhase = 'waiting';
+        this.round = 1;
+        this.turnStartTime = 0;
+        this.doubleNext = {};
         this.createdAt = Date.now();
     }
     
     addPlayer(ws, name) {
-        if (this.players.size >= this.maxPlayers) {
-            return null;
-        }
-        
-        const playerId = uuidv4();
+        if (this.players.size >= this.maxPlayers) return null;
+        const id = uuidv4();
         const player = {
-            id: playerId,
-            ws,
-            name,
-            hand: [],
-            gold: CONFIG.INITIAL_GOLD,
+            id, ws, name,
+            points: CONFIG.INITIAL_POINTS,
+            role: null,
+            items: [],
             alive: true,
-            hasShield: false,
-            ready: false
+            roleUsed: false,
+            hasShield: false
         };
-        
-        this.players.set(playerId, player);
+        this.players.set(id, player);
         return player;
     }
     
-    removePlayer(playerId) {
-        this.players.delete(playerId);
-        
-        // 如果房主离开，转移给下一个玩家
-        if (this.hostId === playerId && this.players.size > 0) {
+    removePlayer(id) {
+        this.players.delete(id);
+        if (this.hostId === id && this.players.size > 0) {
             this.hostId = this.players.keys().next().value;
         }
-        
-        // 如果房间空了，删除房间
-        if (this.players.size === 0) {
-            return true; // 删除房间
-        }
-        
-        // 广播更新
+        if (this.players.size === 0) return true;
         this.broadcastRoomUpdate();
         return false;
     }
     
-    isHost(playerId) {
-        return this.hostId === playerId;
-    }
+    isHost(id) { return this.hostId === id; }
     
     canStart() {
-        return this.players.size >= CONFIG.MIN_PLAYERS && 
-               this.players.size <= CONFIG.MAX_PLAYERS;
+        return this.players.size >= CONFIG.MIN_PLAYERS;
     }
     
     startGame() {
         if (!this.canStart()) return false;
-        
         this.gameStarted = true;
-        const deck = generateDrawDeck();
+        this.foodDeck = generateFoodDeck();
+        this.itemDeck = generateItemDeck();
+        this.discardDeck = [];
+        this.foodCards = this.foodDeck.splice(0, CONFIG.FOOD_COUNT);
         
-        // 初始化玩家手牌
-        let cardIndex = 0;
+        // 分配角色
+        const roles = assignRoles(this.players.size);
+        let i = 0;
         for (const [id, player] of this.players) {
-            player.hand = deck.slice(cardIndex, cardIndex + CONFIG.INITIAL_HAND_SIZE);
-            cardIndex += CONFIG.INITIAL_HAND_SIZE;
+            player.role = roles[i];
+            i++;
         }
         
-        this.gameState = {
-            deck: deck.slice(cardIndex),
-            discardPile: [],
-            pot: [],
-            currentTurnPlayerId: this.hostId,
-            round: 1,
-            phase: 'draw'
-        };
+        // 应用学者效果（开局+5积分）
+        for (const [id,player] of this.players) {
+            if (player.role?.id === 'scholar') {
+                player.points += 5;
+            }
+            // 女仆效果：额外1张道具
+            if (player.role?.id === 'maid' && this.itemDeck.length > 0) {
+                player.items.push(this.itemDeck.pop());
+            }
+        }
+        
+        // 随机开始玩家
+        this.currentTurnIndex = Math.floor(Math.random() * this.players.size);
+        this.turnPhase = 'flip';
+        this.round = 1;
+        this.turnStartTime = Date.now();
         
         return true;
     }
     
-    broadcast(message, excludePlayerId = null) {
+    getCurrentPlayer() {
+        return Array.from(this.players.values())[this.currentTurnIndex];
+    }
+    
+    getAlivePlayers() {
+        return Array.from(this.players.values()).filter(p => p.alive);
+    }
+    
+    getNextAliveIndex() {
+        const players = Array.from(this.players.values());
+        for (let i = 1; i < players.length; i++) {
+            const idx = (this.currentTurnIndex + i) % players.length;
+            if (players[idx].alive) return idx;
+        }
+        return this.currentTurnIndex;
+    }
+    
+    flipCard(playerId, position) {
+        const player = this.players.get(playerId);
+        if (!player || !player.alive) return { error: '无效玩家' };
+        if (this.getCurrentPlayer().id !== playerId) return { error: '不是你的回合' };
+        if (this.turnPhase !== 'flip') return { error: '不是翻牌阶段' };
+        
+        const card = this.foodCards[position];
+        if (!card || card.revealed) return { error: '无效位置' };
+        
+        card.revealed = true;
+        const cardInfo = CARD_DATA.foods.find(f => f.id === card.id);
+        
+        let result = {
+            position,
+            cardId: card.id,
+            playerId,
+            playerPoints: player.points,
+            eliminated: false
+        };
+        
+        const isDouble = player.role?.id === 'archer' || this.doubleNext[playerId];
+        this.doubleNext[playerId] = false;
+        
+        // 处理特殊效果
+        switch (cardInfo.special) {
+            case 'death':
+                if (player.hasShield || player.role?.id === 'graveyard') {
+                    player.hasShield = false;
+                    card.revealed = false;
+                    result.log = `${player.name} 翻到毒药但被免疫!`;
+                } else {
+                    player.alive = false;
+                    result.eliminated = true;
+                    result.log = `${player.name} 翻到毒药，被淘汰!`;
+                }
+                break;
+                
+            case 'steal_3':
+                const targets = Array.from(this.players.values()).filter(p => p.alive && p.id !== playerId);
+                if (targets.length > 0) {
+                    const target = targets[Math.floor(Math.random() * targets.length)];
+                    const stolen = Math.min(3, target.points);
+                    target.points -= stolen;
+                    player.points += stolen;
+                    result.log = `${player.name} 从${target.name}夺取${stolen}积分!`;
+                }
+                break;
+                
+            case 'draw_item':
+                if (this.itemDeck.length > 0) {
+                    player.items.push(this.itemDeck.pop());
+                    result.log = `${player.name} 获得1张道具牌!`;
+                }
+                break;
+                
+            case 'double_points':
+                this.doubleNext[playerId] = true;
+                result.log = `${player.name} 获得翻倍效果!`;
+                break;
+                
+            case 'extra_flip':
+                result.extraFlip = true;
+                player.points += cardInfo.points * (isDouble ? 2 : 1);
+                result.playerPoints = player.points;
+                result.log = `${player.name} 翻到${cardInfo.name}，获得${cardInfo.points * (isDouble ? 2 : 1)}积分，还有额外翻牌!`;
+                break;
+                
+            default:
+                if (cardInfo.points > 0) {
+                    player.points += cardInfo.points * (isDouble ? 2 : 1);
+                    result.playerPoints = player.points;
+                    result.log = `${player.name} 翻到${cardInfo.name}，获得${cardInfo.points * (isDouble ? 2 : 1)}积分!`;
+                }
+        }
+        
+        // 检查游戏结束
+        if (this.checkGameEnd()) {
+            result.gameEnd = true;
+        } else if (!result.extraFlip) {
+            this.nextTurn();
+        }
+        
+        return result;
+    }
+    
+    nextTurn() {
+        this.currentTurnIndex = this.getNextAliveIndex();
+        const alive = this.getAlivePlayers();
+        
+        if (alive.length <= 1) {
+            return { gameEnd: true };
+        }
+        
+        // 检查是否所有非毒药牌都翻完了
+        const allRevealed = this.foodCards.every(c => c.id === 'poison' || c.revealed);
+        if (allRevealed) {
+            return { gameEnd: true, endType: 'points' };
+        }
+        
+        // 检查是否回到第一个玩家（新一轮）
+        if (this.currentTurnIndex === 0) {
+            this.round++;
+        }
+        
+        this.turnPhase = 'flip';
+        this.turnStartTime = Date.now();
+        
+        return { nextPlayer: this.getCurrentPlayer(), round: this.round };
+    }
+    
+    checkGameEnd() {
+        const alive = this.getAlivePlayers();
+        if (alive.length <= 1) return true;
+        return this.foodCards.every(c => c.id === 'poison' || c.revealed);
+    }
+    
+    getWinner() {
+        const alive = this.getAlivePlayers();
+        if (alive.length === 1) return alive[0];
+        // 积分胜利
+        return Array.from(this.players.values()).sort((a, b) => b.points - a.points)[0];
+    }
+    
+    useItem(playerId, itemIndex) {
+        const player = this.players.get(playerId);
+        if (!player || !player.alive) return { error: '无效玩家' };
+        if (this.getCurrentPlayer().id !== playerId) return { error: '不是你的回合' };
+        
+        const item = player.items[itemIndex];
+        if (!item) return { error: '没有这张道具' };
+        
+        const itemInfo = CARD_DATA.items.find(i => i.id === item.id);
+        player.items.splice(itemIndex, 1);
+        this.discardDeck.push(item);
+        
+        let result = { itemId: item.id, itemName: itemInfo.name };
+        
+        switch (itemInfo.special) {
+            case 'shield':
+                player.hasShield = true;
+                result.log = `${player.name} 使用护身符，获得毒药免疫!`;
+                break;
+            case 'steal_3':
+                const targets = Array.from(this.players.values()).filter(p => p.alive && p.id !== playerId);
+                if (targets.length > 0) {
+                    const target = targets[Math.floor(Math.random() * targets.length)];
+                    const stolen = Math.min(3, target.points);
+                    target.points -= stolen;
+                    player.points += stolen;
+                    result.log = `${player.name} 使用妙手空空，从${target.name}夺取${stolen}积分!`;
+                }
+                break;
+            case 'gold':
+                player.points += 7;
+                result.log = `${player.name} 使用点石成金，获得7积分!`;
+                break;
+            case 'cure':
+                player.hasShield = true;
+                result.log = `${player.name} 使用解毒剂，获得免疫!`;
+                break;
+            default:
+                result.log = `${player.name} 使用了${itemInfo.name}!`;
+        }
+        
+        return result;
+    }
+    
+    useRoleSkill(playerId) {
+        const player = this.players.get(playerId);
+        if (!player || !player.alive) return { error: '无效玩家' };
+        if (player.roleUsed) return { error: '技能已使用' };
+        
+        player.roleUsed = true;
+        let result = { roleId: player.role.id };
+        
+        switch (player.role.id) {
+            case 'innocent':
+                this.foodCards = shuffle(this.foodCards.map(c => ({ ...c, revealed: false })));
+                result.log = `${player.name}（纯白之女）重新洗牌!`;
+                break;
+            case 'rogue':
+                const targets = Array.from(this.players.values()).filter(p => p.alive && p.id !== playerId);
+                if (targets.length > 0) {
+                    const target = targets[Math.floor(Math.random() * targets.length)];
+                    const stolen = Math.min(3, target.points);
+                    target.points -= stolen;
+                    player.points += stolen;
+                    result.log = `${player.name}（老流氓）从${target.name}夺取${stolen}积分!`;
+                }
+                break;
+            case 'skip':
+                result.skipTurn = true;
+                result.log = `${player.name}（少女）跳过了回合!`;
+                break;
+            default:
+                result.log = `${player.name} 触发了${player.role.name}技能!`;
+        }
+        
+        return result;
+    }
+    
+    buyItem(playerId) {
+        const player = this.players.get(playerId);
+        if (!player || !player.alive) return { error: '无效玩家' };
+        if (this.getCurrentPlayer().id !== playerId) return { error: '不是你的回合' };
+        
+        const cost = player.role?.id === 'girl' ? 4 : CONFIG.BUY_COST;
+        if (player.points < cost) return { error: '积分不足' };
+        if (this.itemDeck.length === 0) return { error: '道具牌堆空了' };
+        
+        player.points -= cost;
+        player.items.push(this.itemDeck.pop());
+        
+        return {
+            itemId: player.items[player.items.length - 1].id,
+            cost,
+            points: player.points,
+            log: `${player.name} 购买了1张道具牌`
+        };
+    }
+    
+    broadcast(message, excludeId = null) {
         for (const [id, player] of this.players) {
-            if (id !== excludePlayerId && player.ws.readyState === WebSocket.OPEN) {
+            if (id !== excludeId && player.ws.readyState === WebSocket.OPEN) {
                 player.ws.send(JSON.stringify(message));
             }
         }
     }
     
     broadcastRoomUpdate() {
-        const playerList = [];
-        for (const [id, player] of this.players) {
-            playerList.push({
-                id: player.id,
-                name: player.name,
-                ready: player.ready,
-                isHost: id === this.hostId
-            });
-        }
-        
-        this.broadcast({
-            type: 'room_update',
-            players: playerList,
-            maxPlayers: this.maxPlayers
-        });
-    }
-    
-    sendToPlayer(playerId, message) {
-        const player = this.players.get(playerId);
-        if (player && player.ws.readyState === WebSocket.OPEN) {
-            player.ws.send(JSON.stringify(message));
-        }
+        const list = this.getPlayerList();
+        this.broadcast({ type: 'room_update', players: list });
     }
     
     getPlayerList() {
-        const list = [];
-        for (const [id, player] of this.players) {
-            list.push({
-                id: player.id,
-                name: player.name,
-                ready: player.ready,
-                alive: player.alive,
-                gold: player.gold,
-                handCount: player.hand.length,
-                hasShield: player.hasShield
-            });
-        }
-        return list;
+        return Array.from(this.players.values()).map(p => ({
+            id: p.id,
+            name: p.name,
+            isHost: p.id === this.hostId
+        }));
+    }
+    
+    getGameState() {
+        const players = Array.from(this.players.values()).map(p => ({
+            id: p.id,
+            name: p.name,
+            points: p.points,
+            alive: p.alive,
+            role: p.role,
+            items: p.items
+        }));
+        
+        return {
+            players,
+            foodCards: this.foodCards,
+            itemDeckCount: this.itemDeck.length,
+            currentTurnIndex: this.currentTurnIndex,
+            round: this.round,
+            turnPhase: this.turnPhase
+        };
     }
 }
 
-// 游戏服务器
+// ========== 游戏服务器 ==========
 class GameServer {
     constructor() {
         this.wss = null;
         this.rooms = new Map();
-        this.players = new Map(); // playerId -> { roomCode, ws }
+        this.players = new Map();
     }
     
     start(port) {
         this.wss = new WebSocket.Server({ port });
-        
-        console.log(`🎮 游戏服务器启动在端口 ${port}`);
+        console.log(`🎮 服务器启动在端口 ${port}`);
         
         this.wss.on('connection', (ws) => {
-            console.log('🔗 新连接');
-            
             ws.on('message', (data) => {
                 try {
-                    const message = JSON.parse(data);
-                    this.handleMessage(ws, message);
+                    const msg = JSON.parse(data);
+                    this.handleMessage(ws, msg);
                 } catch (e) {
-                    console.error('消息解析错误:', e);
+                    console.error('解析错误:', e);
                 }
             });
             
-            ws.on('close', () => {
-                this.handleDisconnect(ws);
-            });
-            
-            ws.on('error', (error) => {
-                console.error('WebSocket错误:', error);
-            });
+            ws.on('close', () => this.handleDisconnect(ws));
+            ws.on('error', (e) => console.error('WS错误:', e));
         });
-        
-        // 清理过期房间（1小时无活动）
-        setInterval(() => this.cleanupRooms(), 3600000);
     }
     
-    handleMessage(ws, message) {
-        const { type, ...data } = message;
+    handleMessage(ws, msg) {
+        const { type, ...data } = msg;
         
         switch (type) {
-            case 'login':
-                this.handleLogin(ws, data);
-                break;
-            case 'create_room':
-                this.handleCreateRoom(ws, data);
-                break;
-            case 'join_room':
-                this.handleJoinRoom(ws, data);
-                break;
-            case 'leave_room':
-                this.handleLeaveRoom(ws);
-                break;
-            case 'ready':
-                this.handleReady(ws);
-                break;
-            case 'start_game':
-                this.handleStartGame(ws);
-                break;
-            case 'draw_card':
-                this.handleDrawCard(ws);
-                break;
-            case 'play_card':
-                this.handlePlayCard(ws, data);
-                break;
-            case 'use_skill':
-                this.handleUseSkill(ws, data);
-                break;
-            case 'buy_item':
-                this.handleBuyItem(ws, data);
-                break;
-            case 'end_turn':
-                this.handleEndTurn(ws);
-                break;
-            default:
-                console.log('未知消息类型:', type);
+            case 'login': this.handleLogin(ws, data); break;
+            case 'create_room': this.handleCreateRoom(ws, data); break;
+            case 'join_room': this.handleJoinRoom(ws, data); break;
+            case 'leave_room': this.handleLeaveRoom(ws); break;
+            case 'start_game': this.handleStartGame(ws); break;
+            case 'flip_card': this.handleFlipCard(ws, data); break;
+            case 'use_item': this.handleUseItem(ws, data); break;
+            case 'use_role_skill': this.handleUseRoleSkill(ws); break;
+            case 'buy_item': this.handleBuyItem(ws); break;
+            case 'skip_phase': this.handleSkipPhase(ws); break;
         }
     }
     
     handleLogin(ws, { nickname }) {
-        const playerId = uuidv4();
-        ws.playerId = playerId;
+        ws.playerId = uuidv4();
         ws.nickname = nickname;
-        
-        this.players.set(playerId, { ws, roomCode: null });
-        
-        ws.send(JSON.stringify({
-            type: 'login',
-            playerId
-        }));
-        
-        console.log(`✅ 玩家登录: ${nickname} (${playerId})`);
+        this.players.set(ws.playerId, { ws, roomCode: null });
+        ws.send(JSON.stringify({ type: 'login', playerId: ws.playerId }));
     }
     
-    handleCreateRoom(ws, { maxPlayers, gameMode }) {
-        if (!ws.playerId) {
-            return ws.send(JSON.stringify({ type: 'error', message: '请先登录' }));
-        }
+    handleCreateRoom(ws, { maxPlayers }) {
+        if (!ws.playerId) return ws.send(JSON.stringify({ type: 'error', message: '请先登录' }));
         
-        // 生成唯一房间号
-        let roomCode;
-        do {
-            roomCode = generateRoomCode();
-        } while (this.rooms.has(roomCode));
+        let code;
+        do { code = generateRoomCode(); } while (this.rooms.has(code));
         
-        // 创建房间
-        const room = new Room(roomCode, ws.playerId, maxPlayers, gameMode);
+        const room = new Room(code, ws.playerId, maxPlayers);
         room.addPlayer(ws, ws.nickname);
-        this.rooms.set(roomCode, room);
+        this.rooms.set(code, room);
+        this.players.get(ws.playerId).roomCode = code;
         
-        // 更新玩家信息
-        this.players.get(ws.playerId).roomCode = roomCode;
-        
-        // 发送房间信息
         ws.send(JSON.stringify({
             type: 'room_created',
-            roomCode,
+            roomCode: code,
             maxPlayers,
-            gameMode,
             players: room.getPlayerList()
         }));
-        
-        console.log(`🏠 房间创建: ${roomCode} by ${ws.nickname}`);
     }
     
     handleJoinRoom(ws, { roomCode, nickname }) {
-        if (!ws.playerId) {
-            return ws.send(JSON.stringify({ type: 'error', message: '请先登录' }));
-        }
+        if (!ws.playerId) return ws.send(JSON.stringify({ type: 'error', message: '请先登录' }));
         
         const room = this.rooms.get(roomCode);
+        if (!room) return ws.send(JSON.stringify({ type: 'error', message: '房间不存在' }));
+        if (room.gameStarted) return ws.send(JSON.stringify({ type: 'error', message: '游戏已开始' }));
+        if (room.players.size >= room.maxPlayers) return ws.send(JSON.stringify({ type: 'error', message: '房间已满' }));
         
-        if (!room) {
-            return ws.send(JSON.stringify({ type: 'error', message: '房间不存在' }));
-        }
-        
-        if (room.gameStarted) {
-            return ws.send(JSON.stringify({ type: 'error', message: '游戏已开始' }));
-        }
-        
-        if (room.players.size >= room.maxPlayers) {
-            return ws.send(JSON.stringify({ type: 'error', message: '房间已满' }));
-        }
-        
-        // 加入房间
         const player = room.addPlayer(ws, nickname || ws.nickname);
-        if (!player) {
-            return ws.send(JSON.stringify({ type: 'error', message: '加入房间失败' }));
-        }
-        
-        // 更新玩家信息
         this.players.get(ws.playerId).roomCode = roomCode;
         
-        // 发送房间信息给新玩家
         ws.send(JSON.stringify({
             type: 'room_joined',
             roomCode,
             maxPlayers: room.maxPlayers,
-            gameMode: room.gameMode,
-            players: room.getPlayerList(),
-            isHost: false
+            players: room.getPlayerList()
         }));
         
-        // 广播其他玩家
-        room.broadcast({
-            type: 'player_joined',
-            playerId: player.id,
-            playerName: player.name
-        }, ws.playerId);
-        
-        console.log(`👤 ${player.name} 加入房间 ${roomCode}`);
+        room.broadcast({ type: 'player_joined', playerId: player.id, playerName: player.name }, ws.playerId);
     }
     
     handleLeaveRoom(ws) {
-        const playerInfo = this.players.get(ws.playerId);
-        if (!playerInfo || !playerInfo.roomCode) return;
+        const info = this.players.get(ws.playerId);
+        if (!info?.roomCode) return;
         
-        const room = this.rooms.get(playerInfo.roomCode);
+        const room = this.rooms.get(info.roomCode);
         if (!room) return;
         
-        const shouldDelete = room.removePlayer(ws.playerId);
+        room.removePlayer(ws.playerId);
+        room.broadcast({ type: 'player_left', playerId: ws.playerId });
         
-        room.broadcast({
-            type: 'player_left',
-            playerId: ws.playerId
-        });
-        
-        if (shouldDelete) {
-            this.rooms.delete(playerInfo.roomCode);
-            console.log(`🗑️ 房间 ${playerInfo.roomCode} 已删除`);
+        if (room.players.size === 0) {
+            this.rooms.delete(info.roomCode);
         }
-        
-        playerInfo.roomCode = null;
-    }
-    
-    handleReady(ws) {
-        const playerInfo = this.players.get(ws.playerId);
-        if (!playerInfo || !playerInfo.roomCode) return;
-        
-        const room = this.rooms.get(playerInfo.roomCode);
-        if (!room) return;
-        
-        const player = room.players.get(ws.playerId);
-        if (player) {
-            player.ready = !player.ready;
-            room.broadcastRoomUpdate();
-        }
+        info.roomCode = null;
     }
     
     handleStartGame(ws) {
-        const playerInfo = this.players.get(ws.playerId);
-        if (!playerInfo || !playerInfo.roomCode) return;
+        const info = this.players.get(ws.playerId);
+        if (!info?.roomCode) return;
         
-        const room = this.rooms.get(playerInfo.roomCode);
-        if (!room) return;
-        
-        if (!room.isHost(ws.playerId)) {
-            return ws.send(JSON.stringify({ type: 'error', message: '只有房主可以开始游戏' }));
-        }
+        const room = this.rooms.get(info.roomCode);
+        if (!room || !room.isHost(ws.playerId)) return ws.send(JSON.stringify({ type: 'error', message: '只有房主可以开始' }));
         
         if (!room.startGame()) {
-            return ws.send(JSON.stringify({ type: 'error', message: '无法开始游戏' }));
+            return ws.send(JSON.stringify({ type: 'error', message: '玩家不足' }));
         }
         
-        // 给每个玩家发送初始手牌
         for (const [id, player] of room.players) {
+            const state = room.getGameState();
             player.ws.send(JSON.stringify({
                 type: 'game_start',
-                drawDeck: player.hand, // 只发送自己的手牌
-                players: room.getPlayerList(),
-                maxPlayers: room.maxPlayers
-            }));
-        }
-        
-        console.log(`🎮 房间 ${room.code} 游戏开始！`);
-    }
-    
-    handleDrawCard(ws) {
-        const playerInfo = this.players.get(ws.playerId);
-        if (!playerInfo || !playerInfo.roomCode) return;
-        
-        const room = this.rooms.get(playerInfo.roomCode);
-        if (!room || !room.gameStarted) return;
-        
-        const player = room.players.get(ws.playerId);
-        if (!player || !player.alive) return;
-        
-        // 检查是否是当前玩家
-        if (room.gameState.currentTurnPlayerId !== ws.playerId) {
-            return ws.send(JSON.stringify({ type: 'error', message: '还没轮到你' }));
-        }
-        
-        // 抽牌
-        if (room.gameState.deck.length === 0) {
-            // 洗牌弃牌堆
-            room.gameState.deck = shuffle(room.gameState.discardPile);
-            room.gameState.discardPile = [];
-        }
-        
-        if (room.gameState.deck.length > 0) {
-            const card = room.gameState.deck.pop();
-            player.hand.push(card);
-            room.gameState.phase = 'action';
-            
-            ws.send(JSON.stringify({
-                type: 'card_drawn',
-                card,
-                deckCount: room.gameState.deck.length
+                ...state,
+                myId: player.id,
+                assignedRole: player.role,
+                assignedItems: player.items
             }));
         }
     }
     
-    handlePlayCard(ws, { cardId }) {
-        const playerInfo = this.players.get(ws.playerId);
-        if (!playerInfo || !playerInfo.roomCode) return;
+    handleFlipCard(ws, { position }) {
+        const info = this.players.get(ws.playerId);
+        if (!info?.roomCode) return;
         
-        const room = this.rooms.get(playerInfo.roomCode);
+        const room = this.rooms.get(info.roomCode);
         if (!room || !room.gameStarted) return;
         
-        const player = room.players.get(ws.playerId);
-        if (!player || !player.alive) return;
+        const result = room.flipCard(ws.playerId, position);
         
-        // 找到并移除手牌
-        const cardIndex = player.hand.indexOf(cardId);
-        if (cardIndex === -1) {
-            return ws.send(JSON.stringify({ type: 'error', message: '你没有这张牌' }));
+        if (result.error) {
+            return ws.send(JSON.stringify({ type: 'error', message: result.error }));
         }
         
-        player.hand.splice(cardIndex, 1);
-        room.gameState.pot.push(cardId);
+        room.broadcast({ type: 'card_flipped', ...result });
+        ws.send(JSON.stringify({ type: 'card_flipped', ...result }));
         
-        // 广播出牌
-        room.broadcast({
-            type: 'card_played',
-            playerId: ws.playerId,
-            playerName: player.name,
-            card: cardId,
-            pot: room.gameState.pot
-        }, ws.playerId);
-        
-        ws.send(JSON.stringify({
-            type: 'card_played',
-            card: cardId,
-            pot: room.gameState.pot
-        }));
-    }
-    
-    handleUseSkill(ws, { cardId, targetId }) {
-        const playerInfo = this.players.get(ws.playerId);
-        if (!playerInfo || !playerInfo.roomCode) return;
-        
-        const room = this.rooms.get(playerInfo.roomCode);
-        if (!room || !room.gameStarted) return;
-        
-        const player = room.players.get(ws.playerId);
-        if (!player || !player.alive) return;
-        
-        // 检查是否有这张技能牌
-        const cardIndex = player.hand.indexOf(cardId);
-        if (cardIndex === -1) {
-            return ws.send(JSON.stringify({ type: 'error', message: '你没有这张牌' }));
-        }
-        
-        const cardCategory = CARD_DATA.skills[cardId];
-        if (!cardCategory) {
-            return ws.send(JSON.stringify({ type: 'error', message: '这不是技能牌' }));
-        }
-        
-        // 处理技能效果
-        let result = { success: true };
-        
-        switch (cardId) {
-            case 'gold':
-                player.gold += 2;
-                player.hand.splice(cardIndex, 1);
-                room.gameState.discardPile.push(cardId);
-                result = { action: 'add_gold', amount: 2 };
-                break;
-                
-            case 'amulet':
-                player.hasShield = true;
-                player.hand.splice(cardIndex, 1);
-                room.gameState.discardPile.push(cardId);
-                result = { action: 'add_shield' };
-                break;
-                
-            case 'energy_drink':
-                player.hand.splice(cardIndex, 1);
-                room.gameState.discardPile.push(cardId);
-                result = { action: 'extra_turn' };
-                break;
-                
-            case 'magnifier':
-                result = { action: 'peek_pot', pot: room.gameState.pot };
-                break;
-                
-            case 'peek':
-                const target = room.players.get(targetId);
-                if (target) {
-                    result = { action: 'peek_hand', hand: target.hand };
-                }
-                break;
-                
-            default:
-                player.hand.splice(cardIndex, 1);
-                room.gameState.discardPile.push(cardId);
-        }
-        
-        ws.send(JSON.stringify({
-            type: 'skill_used',
-            card: cardId,
-            ...result
-        }));
-        
-        room.broadcast({
-            type: 'skill_used',
-            playerId: ws.playerId,
-            playerName: player.name,
-            card: cardId
-        }, ws.playerId);
-    }
-    
-    handleBuyItem(ws, { cardId }) {
-        const playerInfo = this.players.get(ws.playerId);
-        if (!playerInfo || !playerInfo.roomCode) return;
-        
-        const room = this.rooms.get(playerInfo.roomCode);
-        if (!room || !room.gameStarted) return;
-        
-        const player = room.players.get(ws.playerId);
-        if (!player || !player.alive) return;
-        
-        // 检查价格
-        let price = 1;
-        if (CARD_DATA.materials[cardId]) {
-            price = CARD_DATA.materials[cardId].price;
-        } else if (CARD_DATA.skills[cardId]) {
-            price = CARD_DATA.skills[cardId].price;
-        }
-        
-        if (player.gold < price) {
-            return ws.send(JSON.stringify({ type: 'error', message: '金币不足' }));
-        }
-        
-        player.gold -= price;
-        
-        // 从牌堆抽取
-        if (room.gameState.deck.length > 0) {
-            const card = room.gameState.deck.pop();
-            player.hand.push(card);
-            
-            ws.send(JSON.stringify({
-                type: 'item_bought',
-                card,
-                price,
-                remainingGold: player.gold
-            }));
-        }
-    }
-    
-    handleEndTurn(ws) {
-        const playerInfo = this.players.get(ws.playerId);
-        if (!playerInfo || !playerInfo.roomCode) return;
-        
-        const room = this.rooms.get(playerInfo.roomCode);
-        if (!room || !room.gameStarted) return;
-        
-        if (room.gameState.currentTurnPlayerId !== ws.playerId) {
-            return ws.send(JSON.stringify({ type: 'error', message: '还没轮到你' }));
-        }
-        
-        // 检查锅中是否有毒药
-        const hasPoison = room.gameState.pot.some(cardId => {
-            const mat = CARD_DATA.materials[cardId];
-            return mat && mat.subtype === 'danger';
-        });
-        
-        // 检查是否有解药
-        const hasAntidote = room.gameState.pot.includes('antidote');
-        
-        // 检查是否有力量药剂（跳过效果）
-        const hasPower = room.gameState.pot.includes('power');
-        
-        let eliminatedPlayer = null;
-        
-        if (hasPoison && !hasPower) {
-            // 找到下一个玩家（受害者）
-            const playerIds = Array.from(room.players.keys());
-            const currentIndex = playerIds.indexOf(ws.playerId);
-            const nextIndex = (currentIndex + 1) % playerIds.length;
-            const nextPlayerId = playerIds[nextIndex];
-            const nextPlayer = room.players.get(nextPlayerId);
-            
-            if (nextPlayer && nextPlayer.alive) {
-                if (hasAntidote) {
-                    // 解药抵消毒药
-                    nextPlayer.hasShield = true;
-                } else if (!nextPlayer.hasShield) {
-                    // 中毒死亡
-                    nextPlayer.alive = false;
-                    eliminatedPlayer = nextPlayer;
-                } else {
-                    // 护盾抵消毒药
-                    nextPlayer.hasShield = false;
-                }
-            }
-        }
-        
-        // 清空锅中
-        room.gameState.discardPile.push(...room.gameState.pot);
-        room.gameState.pot = [];
-        
-        // 移动到下一个玩家
-        let nextPlayerId = this.getNextAlivePlayer(room, ws.playerId);
-        room.gameState.currentTurnPlayerId = nextPlayerId;
-        
-        // 检查回合
-        if (nextPlayerId === room.getPlayerList().find(p => p.alive)?.id || 
-            room.gameState.round === 1) {
-            room.gameState.round++;
-        }
-        
-        // 检查游戏是否结束
-        const alivePlayers = Array.from(room.players.values()).filter(p => p.alive);
-        
-        if (alivePlayers.length <= 1 || room.gameState.round > CONFIG.MAX_ROUNDS) {
-            // 游戏结束
-            const winner = alivePlayers.sort((a, b) => b.gold - a.gold)[0];
-            
-            for (const [id, p] of room.players) {
-                p.ws.send(JSON.stringify({
-                    type: 'game_end',
-                    winner: winner ? { id: winner.id, name: winner.name } : null,
-                    players: room.getPlayerList()
-                }));
-            }
-            
-            console.log(`🏆 游戏结束！胜利者: ${winner?.name}`);
-        } else {
-            // 广播回合信息
-            const nextPlayer = room.players.get(nextPlayerId);
+        if (result.gameEnd) {
+            const winner = room.getWinner();
             room.broadcast({
-                type: 'turn_end',
-                eliminated: eliminatedPlayer ? { id: eliminatedPlayer.id, name: eliminatedPlayer.name } : null,
-                nextPlayerId,
-                round: room.gameState.round
+                type: 'game_end',
+                winner: { id: winner.id, name: winner.name },
+                players: room.getGameState().players,
+                endType: 'survival'
             });
-            
-            nextPlayer.ws.send(JSON.stringify({
-                type: 'turn_start',
-                playerId: nextPlayerId,
-                playerName: nextPlayer.name,
-                phase: 'draw'
-            }));
+        } else if (result.nextPlayer) {
+            room.broadcast({
+                type: 'turn_update',
+                currentTurnIndex: room.currentTurnIndex,
+                round: room.round,
+                phase: room.turnPhase
+            });
         }
     }
     
-    getNextAlivePlayer(room, currentPlayerId) {
-        const playerIds = Array.from(room.players.keys());
-        let nextIndex = playerIds.indexOf(currentPlayerId) + 1;
+    handleUseItem(ws, { itemIndex }) {
+        const info = this.players.get(ws.playerId);
+        if (!info?.roomCode) return;
         
-        for (let i = 0; i < playerIds.length; i++) {
-            const checkIndex = (nextIndex + i) % playerIds.length;
-            const player = room.players.get(playerIds[checkIndex]);
-            if (player && player.alive) {
-                return playerIds[checkIndex];
-            }
+        const room = this.rooms.get(info.roomCode);
+        if (!room) return;
+        
+        const result = room.useItem(ws.playerId, itemIndex);
+        
+        if (result.error) {
+            return ws.send(JSON.stringify({ type: 'error', message: result.error }));
         }
         
-        return currentPlayerId;
+        room.broadcast({ type: 'item_used', playerId: ws.playerId, ...result });
+        ws.send(JSON.stringify({ type: 'item_used', ...result }));
+    }
+    
+    handleUseRoleSkill(ws) {
+        const info = this.players.get(ws.playerId);
+        if (!info?.roomCode) return;
+        
+        const room = this.rooms.get(info.roomCode);
+        if (!room) return;
+        
+        const result = room.useRoleSkill(ws.playerId);
+        
+        if (result.error) {
+            return ws.send(JSON.stringify({ type: 'error', message: result.error }));
+        }
+        
+        room.broadcast({ type: 'role_skill_used', playerId: ws.playerId, ...result });
+        ws.send(JSON.stringify({ type: 'role_skill_used', ...result }));
+        
+        if (result.skipTurn) {
+            room.nextTurn();
+            room.broadcast({ type: 'turn_update', currentTurnIndex: room.currentTurnIndex, round: room.round });
+        }
+    }
+    
+    handleBuyItem(ws) {
+        const info = this.players.get(ws.playerId);
+        if (!info?.roomCode) return;
+        
+        const room = this.rooms.get(info.roomCode);
+        if (!room) return;
+        
+        const result = room.buyItem(ws.playerId);
+        
+        if (result.error) {
+            return ws.send(JSON.stringify({ type: 'error', message: result.error }));
+        }
+        
+        room.broadcast({ type: 'item_bought', playerId: ws.playerId, ...result });
+        ws.send(JSON.stringify({ type: 'item_bought', ...result }));
+    }
+    
+    handleSkipPhase(ws) {
+        const info = this.players.get(ws.playerId);
+        if (!info?.roomCode) return;
+        
+        const room = this.rooms.get(info.roomCode);
+        if (!room || room.getCurrentPlayer().id !== ws.playerId) return;
+        
+        if (room.turnPhase === 'flip') {
+            room.turnPhase = 'buy';
+        } else {
+            const next = room.nextTurn();
+            if (next.gameEnd) {
+                const winner = room.getWinner();
+                room.broadcast({
+                    type: 'game_end',
+                    winner: { id: winner.id, name: winner.name },
+                    players: room.getGameState().players,
+                    endType: next.endType || 'survival'
+                });
+            } else {
+                room.broadcast({ type: 'turn_update', currentTurnIndex: room.currentTurnIndex, round: room.round, phase: room.turnPhase });
+            }
+        }
     }
     
     handleDisconnect(ws) {
-        console.log('🔌 连接断开');
-        
         if (ws.playerId) {
-            const playerInfo = this.players.get(ws.playerId);
-            if (playerInfo && playerInfo.roomCode) {
+            const info = this.players.get(ws.playerId);
+            if (info?.roomCode) {
                 this.handleLeaveRoom(ws);
             }
             this.players.delete(ws.playerId);
         }
     }
-    
-    cleanupRooms() {
-        const now = Date.now();
-        for (const [code, room] of this.rooms) {
-            if (now - room.createdAt > 3600000 && room.players.size === 0) {
-                this.rooms.delete(code);
-                console.log(`🧹 清理过期房间: ${code}`);
-            }
-        }
-    }
 }
 
-// 启动服务器
 const server = new GameServer();
 server.start(PORT);
