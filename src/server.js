@@ -117,6 +117,8 @@ class Room {
         this.turnStartTime = 0;
         this.doubleNext = {};
         this.createdAt = Date.now();
+        this.autoStartTimer = null;
+        this.AUTO_START_DELAY = 3000; // 3秒后自动开始（玩家>=2人）
     }
     
     addPlayer(ws, name) {
@@ -140,9 +142,35 @@ class Room {
         if (this.hostId === id && this.players.size > 0) {
             this.hostId = this.players.keys().next().value;
         }
-        if (this.players.size === 0) return true;
+        if (this.players.size === 0) {
+            this.clearAutoStartTimer();
+            return true;
+        }
         this.broadcastRoomUpdate();
+        // 如果玩家>=2，尝试自动开始
+        this.tryAutoStart();
         return false;
+    }
+    
+    // 自动开始游戏
+    tryAutoStart() {
+        if (this.gameStarted) return;
+        if (this.players.size >= CONFIG.MIN_PLAYERS) {
+            this.clearAutoStartTimer();
+            this.autoStartTimer = setTimeout(() => {
+                if (!this.gameStarted && this.players.size >= CONFIG.MIN_PLAYERS) {
+                    console.log(`房间 ${this.code} 自动开始游戏`);
+                    this.startGame();
+                }
+            }, this.AUTO_START_DELAY);
+        }
+    }
+    
+    clearAutoStartTimer() {
+        if (this.autoStartTimer) {
+            clearTimeout(this.autoStartTimer);
+            this.autoStartTimer = null;
+        }
     }
     
     isHost(id) { return this.hostId === id; }
@@ -556,6 +584,9 @@ class GameServer {
         }));
         
         room.broadcast({ type: 'player_joined', playerId: player.id, playerName: player.name }, ws.playerId);
+        
+        // 尝试自动开始游戏（玩家>=2时）
+        room.tryAutoStart();
     }
     
     handleLeaveRoom(ws) {
@@ -584,6 +615,9 @@ class GameServer {
         if (!room.startGame()) {
             return ws.send(JSON.stringify({ type: 'error', message: '玩家不足' }));
         }
+        
+        // 清除自动开始定时器
+        room.clearAutoStartTimer();
         
         for (const [id, player] of room.players) {
             const state = room.getGameState();
